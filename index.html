@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пригода Єнота-Дослідника 3D</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #10141c;
+    overflow: hidden;
+    height: 100%;
+    font-family: 'Courier New', 'Lucida Console', monospace;
+    font-weight: bold;
+  }
+  #stage {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  canvas#game {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    background: #3a86c9;
+  }
+  .px { image-rendering: pixelated; vertical-align: middle; }
+  .hidden { display: none !important; }
+
+  #hud, #hudRight {
+    position: fixed;
+    top: 12px;
+    color: #fff;
+    text-shadow: 2px 2px 0 #1b1420;
+    pointer-events: none;
+    user-select: none;
+  }
+  #hud { left: 14px; }
+  #hudRight { right: 14px; text-align: right; }
+  #hearts img { margin-right: 4px; }
+  #counters { font-size: 20px; margin-top: 6px; }
+  #counters img { margin-right: 6px; }
+  #counters .gap { display: inline-block; width: 16px; }
+  #dash { margin-top: 8px; font-size: 11px; opacity: 0.9; }
+  #dash .track { display: inline-block; width: 64px; height: 6px; background: #1b1420; border: 2px solid #1b1420; vertical-align: middle; margin-left: 6px; }
+  #dashFill { display: block; height: 100%; width: 100%; background: #6fe3ff; }
+  #chakra { margin-top: 5px; font-size: 11px; opacity: 0.9; }
+  #chakra .track { display: inline-block; width: 64px; height: 6px; background: #1b1420; border: 2px solid #1b1420; vertical-align: middle; margin-left: 6px; }
+  #chakraFill { display: block; height: 100%; width: 100%; background: #ff9a2e; }
+  #buffs { margin-top: 8px; }
+  .buff { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; }
+  .buff .track { width: 54px; height: 6px; background: #1b1420; border: 2px solid #1b1420; }
+  .buff .fill { display: block; height: 100%; background: #ffd23f; }
+  #score { font-size: 24px; }
+  #combo { font-size: 16px; color: #ffd23f; margin-top: 2px; }
+  #timer { font-size: 15px; margin-top: 4px; opacity: 0.95; }
+  #levelIndicator { font-size: 13px; margin-top: 4px; opacity: 0.85; }
+  #muteHint { font-size: 11px; margin-top: 4px; opacity: 0.6; }
+
+  #bossBar {
+    position: fixed;
+    left: 50%;
+    top: 14px;
+    transform: translateX(-50%);
+    width: min(46vw, 420px);
+    color: #fff;
+    text-align: center;
+    text-shadow: 2px 2px 0 #1b1420;
+    pointer-events: none;
+  }
+  #bossName { font-size: 14px; margin-bottom: 4px; }
+  #bossBar .track { height: 12px; background: #1b1420; border: 3px solid #1b1420; }
+  #bossFill { display: block; height: 100%; width: 100%; background: #e23b4a; }
+
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 12vh;
+    transform: translateX(-50%);
+    max-width: 80vw;
+    padding: 8px 16px;
+    background: rgba(20,22,34,0.8);
+    border: 3px solid #e8b23c;
+    color: #fff;
+    font-size: 15px;
+    text-align: center;
+    text-shadow: 2px 2px 0 #1b1420;
+    pointer-events: none;
+  }
+  #npcPlate {
+    position: fixed;
+    transform: translate(-50%, -100%);
+    width: max-content;
+    max-width: min(300px, 70vw);
+    padding: 8px 12px 9px;
+    background: rgba(20,22,34,0.93);
+    border: 3px solid #e8b23c;
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+    text-shadow: 1px 1px 0 #1b1420;
+    pointer-events: none;
+  }
+  #npcPlate .name { color: #ffd23f; font-size: 14px; margin-bottom: 4px; }
+  #npcPlate::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -11px;
+    margin-left: -8px;
+    border: 8px solid transparent;
+    border-top-color: #e8b23c;
+    border-bottom: 0;
+  }
+  /* the hero pops up from the left edge with his own remark */
+  #heroPop {
+    position: fixed;
+    left: 10px;
+    bottom: 8px;
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    pointer-events: none;
+  }
+  #heroPop.in { animation: heroIn 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+  #heroPop.out { animation: heroOut 0.3s ease-in both; }
+  #heroPortrait { width: 144px; height: 120px; animation: heroBob 0.5s ease-in-out infinite alternate; }
+  #heroPop .plate {
+    position: relative;
+    max-width: min(260px, 50vw);
+    margin-bottom: 46px;
+    padding: 8px 12px 9px;
+    background: rgba(20,22,34,0.93);
+    border: 3px solid #9bc158;
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.45;
+    text-shadow: 1px 1px 0 #1b1420;
+  }
+  #heroPop .plate::before {
+    content: '';
+    position: absolute;
+    left: -11px;
+    bottom: 12px;
+    border: 8px solid transparent;
+    border-right-color: #9bc158;
+    border-left: 0;
+  }
+  #heroPop .name { color: #c8e88a; font-size: 14px; margin-bottom: 4px; }
+  @keyframes heroIn { from { transform: translate(-110%, 30%) rotate(-12deg); } to { transform: none; } }
+  @keyframes heroOut { from { transform: none; } to { transform: translate(-115%, 20%) rotate(-10deg); } }
+  @keyframes heroBob { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+  #popups { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .popup {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 16px;
+    text-shadow: 2px 2px 0 #1b1420;
+    white-space: nowrap;
+    animation: floatUp 0.9s ease-out forwards;
+  }
+  .popup.gold { color: #ffd23f; }
+  .popup.big { font-size: 22px; color: #ffd23f; }
+  .popup.bad { color: #ff7a7a; }
+  @keyframes floatUp {
+    from { opacity: 1; margin-top: 0; }
+    to { opacity: 0; margin-top: -46px; }
+  }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,14,24,0.84);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+  #overlay h1 { margin: 0; font-size: 28px; text-shadow: 3px 3px 0 #1b1420; }
+  #overlay p { margin: 2px 0; font-size: 14px; line-height: 1.5; opacity: 0.92; max-width: 640px; }
+  #overlay button {
+    padding: 11px 26px;
+    font: inherit;
+    font-size: 17px;
+    border: none;
+    border-bottom: 4px solid #4c7a25;
+    background: #7cb342;
+    color: #fff;
+    cursor: pointer;
+  }
+  #overlay button:hover { background: #8bc34a; }
+  #overlay button:disabled { background: #4a4f5c; border-bottom-color: #30333d; color: #9aa0ae; cursor: default; }
+  #overlay .main { margin-top: 10px; }
+  kbd {
+    background: #2b2f3a;
+    padding: 1px 7px;
+    border: 1px solid #555c6e;
+    border-bottom-width: 3px;
+  }
+  .stars { font-size: 40px; letter-spacing: 6px; color: #ffd23f; text-shadow: 3px 3px 0 #1b1420; }
+  .stars .off { color: #3a3f4c; }
+  .result { font-size: 14px; line-height: 1.7; }
+  .shopTitle { margin-top: 8px; font-size: 16px; color: #ffd23f; }
+  .shop { display: grid; grid-template-columns: repeat(3, minmax(150px, 190px)); gap: 8px; margin-top: 4px; }
+  #overlay .shop button {
+    padding: 8px 8px;
+    font-size: 13px;
+    line-height: 1.35;
+    background: #34507a;
+    border-bottom-color: #22344f;
+  }
+  #overlay .shop button:hover:not(:disabled) { background: #40649a; }
+  .shop .cost { color: #ffd23f; }
+  .shop small { display: block; font-size: 11px; opacity: 0.8; font-weight: normal; }
+  @media (max-width: 640px) { .shop { grid-template-columns: repeat(2, minmax(130px, 1fr)); } }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="stage"><canvas id="game" width="480" height="270"></canvas></div>
+
+<div id="hud">
+  <div id="hearts"></div>
+  <div id="counters"><span id="ammoIcon"></span><span id="ammoCount">0</span><span class="gap"></span><span id="gemIcon"></span><span id="gemCount">0</span></div>
+  <div id="dash">РИВОК<span class="track"><span id="dashFill"></span></span></div>
+  <div id="chakra">ЧАКРА<span class="track"><span id="chakraFill"></span></span></div>
+  <div id="buffs"></div>
+</div>
+
+<div id="hudRight">
+  <div id="score">0</div>
+  <div id="combo" class="hidden"></div>
+  <div id="timer">0:00.0</div>
+  <div id="levelIndicator"></div>
+  <div id="muteHint">M — звук</div>
+</div>
+
+<div id="bossBar" class="hidden">
+  <div id="bossName"></div>
+  <div class="track"><span id="bossFill"></span></div>
+</div>
+
+<div id="npcPlate" class="hidden"><div class="name" id="npcName"></div><div id="npcText"></div></div>
+<div id="heroPop" class="hidden">
+  <canvas id="heroPortrait" class="px" width="48" height="40"></canvas>
+  <div class="plate"><div class="name">Єнот</div><div id="heroText"></div></div>
+</div>
+<div id="toast" class="hidden"></div>
+<div id="popups"></div>
+<div id="flash"></div>
+
+<div id="overlay">
+  <canvas id="titleSprite" class="px" width="48" height="40" style="width:144px;height:120px"></canvas>
+  <h1>Пригода Єнота-Дослідника</h1>
+  <p>Летючі острови захопили тіньові істоти! Збирай блакитні диски — це твої набої — і проведи єнота через 5 рівнів до затишної хатинки на вершині.</p>
+  <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / стрілки — рух · <kbd>Пробіл</kbd> — стрибок (у повітрі — подвійний) · <kbd>Shift</kbd> або <kbd>E</kbd> — ривок з невразливістю</p>
+  <p><kbd>F</kbd> — постріл диском · утримуй <kbd>F</kbd> — заряджений постріл, що пробиває наскрізь (ще −2 диски)</p>
+  <p><kbd>Q</kbd> — Джутсу клонування: два клони приймають удари замість тебе (витрачає чакру) · <kbd>M</kbd> — звук · <kbd>P</kbd> — фото</p>
+  <p>Збирай кристали, щоб купувати покращення між рівнями. За швидкість і проходження без ушкоджень дають зірки.</p>
+  <p id="bestLine"></p>
+  <button id="startBtn" class="main" disabled>Завантаження…</button>
+</div>
+
+<script type="module" src="game.js"></script>
+<script>
+  // If the 3D engine never boots (no network for the CDN, no WebGL), say so instead of hanging.
+  setTimeout(function () {
+    if (!window.__gameReady) {
+      document.getElementById('startBtn').textContent = 'Не вдалося запустити 3D (потрібен інтернет і WebGL)';
+    }
+  }, 8000);
+</script>
+</body>
+</html>
