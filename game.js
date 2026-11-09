@@ -126,6 +126,10 @@ function sfxThunder() { hiss(1.4, 0.12, 'lowpass', 180, 0.25); }
 function sfxHeroPop() { [700, 940, 1180].forEach((f, i) => beep(f, 0.09, 'square', 0.05, i * 0.07)); }
 function sfxShutter() { hiss(0.05, 0.1, 'highpass', 6000); beep(1400, 0.03, 'square', 0.05, 0.05); }
 function sfxHoot() { sweep(520, 400, 0.16, 'sine', 0.08); sweep(470, 360, 0.22, 'sine', 0.08, 0.2); }
+function sfxGrumble() { sweep(170, 120, 0.18, 'square', 0.045); sweep(150, 110, 0.2, 'square', 0.04, 0.2); }
+function sfxYip() { sweep(900, 1350, 0.07, 'triangle', 0.05); sweep(1000, 1500, 0.08, 'triangle', 0.05, 0.11); }
+function sfxTrade() { beep(1320, 0.07, 'triangle', 0.06); beep(880, 0.08, 'square', 0.04, 0.07); beep(1760, 0.12, 'triangle', 0.05, 0.14); }
+function sfxSplash() { hiss(0.4, 0.11, 'lowpass', 1400); sweep(320, 110, 0.3, 'sine', 0.09); }
 function sfxSecret() { [784, 988, 1175, 1568].forEach((f, i) => beep(f, 0.14, 'triangle', 0.06, i * 0.08)); }
 function sfxBuy() { beep(880, 0.08, 'square', 0.05); beep(1320, 0.12, 'square', 0.05, 0.07); }
 function sfxLevelUp() { [520, 660, 880].forEach((f, i) => beep(f, 0.15, 'triangle', 0.07, i * 0.1)); }
@@ -139,7 +143,8 @@ const MUSIC = [
   { bpm: 108, root: 55, chords: [[0, 4, 7], [5, 9, 12], [7, 11, 14], [5, 9, 12]], scale: [0, 2, 4, 5, 7, 9, 11] },
   { bpm: 100, root: 57, chords: [[0, 3, 7], [8, 12, 15], [3, 7, 10], [10, 14, 17]], scale: [0, 2, 3, 5, 7, 8, 10] },
   { bpm: 88, root: 62, chords: [[0, 3, 7], [5, 8, 12], [8, 12, 15], [7, 11, 14]], scale: [0, 2, 3, 5, 7, 8, 10] },
-  { bpm: 120, root: 52, chords: [[0, 3, 7], [10, 14, 17], [8, 12, 15], [7, 11, 14]], scale: [0, 1, 3, 5, 7, 8, 10] }
+  { bpm: 120, root: 52, chords: [[0, 3, 7], [10, 14, 17], [8, 12, 15], [7, 11, 14]], scale: [0, 1, 3, 5, 7, 8, 10] },
+  { bpm: 84, root: 50, chords: [[0, 3, 7], [8, 12, 15], [5, 8, 12], [7, 10, 14]], scale: [0, 2, 3, 5, 7, 8, 10] }
 ];
 function buildMelody(th, seed) {
   const rnd = mulberry32(seed);
@@ -215,6 +220,8 @@ window.addEventListener('keydown', (e) => {
   ensureAudio();
   if (e.code === 'KeyM' && !e.repeat) toggleMute();
   if (e.code === 'KeyP' && !e.repeat) takePhoto();
+  if (e.code === 'KeyE' && !e.repeat) acceptTrade();
+  if (e.code === 'Escape') declineTrade();
   if (GAME_KEYS.has(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -358,6 +365,12 @@ const THEMES = [
     fog: 0x4a5068, hemiSky: 0xa8b0c8, hemiGround: 0x3a3a48, hemiI: 1.25,
     sun: 0xc8d0e8, sunI: 1.3, sunDir: [-10, 26, 10], cloud: 0x7a8094, cloudE: 0x1c2030, tint: 0xc8cce0,
     rain: true, lightning: true
+  },
+  { // crystal caves: no sky, only glowing stone and a violet underground lake
+    sky: [[0, [14, 10, 26]], [0.5, [28, 20, 50]], [1, [44, 28, 72]]],
+    fog: 0x1a1230, hemiSky: 0x9a8ae0, hemiGround: 0x2a1c44, hemiI: 1.35,
+    sun: 0xa8b8ff, sunI: 1.1, sunDir: [-8, 26, 14], cloud: 0x5a4a7a, cloudE: 0x1a1230, tint: 0xd4d0f4,
+    cave: true, lanterns: true, fireflies: true, fireflyColor: 0x8fe8ff
   }
 ];
 let theme = THEMES[0];
@@ -472,6 +485,50 @@ const texRoof = pixTex(16, 16, 19, 1, 1, (g, w, h, rnd) => {
   for (let y = 0; y < h; y += 4) for (let x = (y % 8 ? 0 : 4); x < w; x += 8) g.fillRect(x, y, 1, 4);
 });
 
+// crystal caves: blue-grey stone floors seeded with crystal grit, violet brick walls, glowing water
+function brickRows(g, w, h, rnd, mortar, shades, light, rowH) {
+  g.fillStyle = mortar;
+  g.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += rowH) {
+    let x = -((rnd() * 6) | 0);
+    while (x < w) {
+      const bw = 6 + ((rnd() * 5) | 0);
+      g.fillStyle = shades[(rnd() * shades.length) | 0];
+      g.fillRect(x + 1, y + 1, bw - 1, rowH - 1);
+      g.fillStyle = light;
+      g.fillRect(x + 1, y + 1, bw - 1, 1);
+      x += bw;
+    }
+  }
+}
+const texCaveTop = pixTex(32, 32, 31, 0.5, 0.5, (g, w, h, rnd) => {
+  speckle(g, w, h, rnd, '#5a6278', ['#66708a', '#4e566a', '#707a94', '#4e566a'], 0.36);
+  cracks(g, w, h, rnd, '#3e4456', 4);
+  for (let i = 0; i < 12; i++) {
+    g.fillStyle = ['#7fe8ff', '#c0a0ff', '#8affc4', '#bff2ff'][(rnd() * 4) | 0];
+    g.fillRect((rnd() * w) | 0, (rnd() * h) | 0, 1 + ((rnd() * 2) | 0), 1);
+  }
+});
+const texCaveSide = pixTex(32, 16, 32, 0.5, 1, (g, w, h, rnd) => {
+  brickRows(g, w, h, rnd, '#211a2e', ['#3a3050', '#42385a', '#352c48', '#3e3454'], '#4e4468', 4);
+  g.fillStyle = '#6a7288'; g.fillRect(0, 0, w, 2);
+  g.fillStyle = '#8890a8'; g.fillRect(0, 0, w, 1);
+});
+const texCaveBrick = pixTex(32, 32, 33, 0.5, 0.5, (g, w, h, rnd) => {
+  brickRows(g, w, h, rnd, '#1c1626', ['#3a3050', '#342b48', '#40365a', '#2e2640'], '#4a4064', 4);
+  for (let i = 0; i < 4; i++) {
+    g.fillStyle = rnd() < 0.5 ? '#6fd8ff' : '#b08cff';
+    g.fillRect((rnd() * w) | 0, (rnd() * h) | 0, 1, 1);
+  }
+});
+const texWater = pixTex(32, 32, 34, 1, 1, (g, w, h, rnd) => {
+  speckle(g, w, h, rnd, '#1c0c40', ['#24104e', '#2c145e', '#170936'], 0.4);
+  for (let i = 0; i < 6; i++) {
+    g.fillStyle = rnd() < 0.6 ? '#5a38b0' : '#8a68e0';
+    g.fillRect((rnd() * w) | 0, (rnd() * h) | 0, 2 + ((rnd() * 4) | 0), 1);
+  }
+});
+
 const lambert = (map) => new THREE.MeshLambertMaterial({ map });
 const M = {
   grassTop: lambert(texGrassTop),
@@ -484,9 +541,14 @@ const M = {
   leavesLight: lambert(texLeavesLight),
   bark: lambert(texBark),
   plank: lambert(texPlank),
-  roof: lambert(texRoof)
+  roof: lambert(texRoof),
+  caveTop: lambert(texCaveTop),
+  caveSide: lambert(texCaveSide),
+  caveBrick: lambert(texCaveBrick)
 };
 const slabMats = [M.grassSide, M.grassSide, M.grassTop, M.dirt, M.grassSide, M.grassSide];
+const caveSlabMats = [M.caveSide, M.caveSide, M.caveTop, M.caveBrick, M.caveSide, M.caveSide];
+const waterMat = new THREE.MeshBasicMaterial({ map: texWater, transparent: true, opacity: 0.9 });
 const crackMats = [M.crackSide, M.crackSide, M.crackTop, M.dirt, M.crackSide, M.crackSide];
 
 const flatCache = new Map();
@@ -526,10 +588,51 @@ function addBox(parent, w, h, d, mat, x, y, z, shadow = true) {
 // ===========================================================================
 // World pieces
 // ===========================================================================
+// crystal cluster: one tall shard and a few smaller ones, each with a paler tip; hang = points down
+const CRYSTALS = [[0x58c8f0, 0xbff2ff], [0xa078f0, 0xe0d0ff], [0x5ee8a0, 0xccffe4]];
+function addCrystals(parent, x, y, z, rnd, size, hang = false) {
+  const [base, tip] = CRYSTALS[(rnd() * CRYSTALS.length) | 0];
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  if (hang) g.rotation.x = Math.PI;
+  const n = 2 + ((rnd() * 3) | 0);
+  for (let i = 0; i < n; i++) {
+    const h = size * (i === 0 ? 1 : 0.4 + rnd() * 0.4), sw = size * (i === 0 ? 0.3 : 0.2);
+    const shard = new THREE.Group();
+    if (i) shard.position.set((rnd() - 0.5) * size * 0.7, 0, (rnd() - 0.5) * size * 0.7);
+    shard.rotation.set((rnd() - 0.5) * 0.7, rnd() * Math.PI, (rnd() - 0.5) * 0.7);
+    addBox(shard, sw, h * 0.78, sw, glow(base), 0, h * 0.39, 0, false);
+    addBox(shard, sw * 0.6, h * 0.22, sw * 0.6, glow(tip), 0, h * 0.89, 0, false);
+    g.add(shard);
+  }
+  parent.add(g);
+  return base;
+}
+// a big crystal cluster takes the place of a tree in the caves
+function addCrystalTree(parent, x, y, z, rnd, colliders, lit) {
+  const color = addCrystals(parent, x, y, z, rnd, 1.3 + rnd() * 0.7);
+  if (lit) {
+    const light = new THREE.PointLight(color, 6, 7);
+    light.position.set(x, y + 1.3, z);
+    parent.add(light);
+  }
+  if (colliders) colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3, minY: y, maxY: y + 1.6, ground: false, off: false });
+}
+
 function buildIsland(parent, isl, rnd, style) {
   const { x, z, w, d, y } = isl;
   const cx = x + w / 2, cz = z + d / 2;
-  addBox(parent, w, 1, d, style === 'crumble' ? crackMats : slabMats, cx, y - 0.5, cz);
+  const cave = !!theme.cave;
+  if (style === 'bridge') {
+    // a narrow stone walkway on wooden trestles that run down into the water
+    addBox(parent, w, 0.5, d, caveSlabMats, cx, y - 0.25, cz);
+    for (let px = x + 0.4; px < x + w; px += Math.max(1.8, (w - 0.8) / 2)) {
+      addBox(parent, 0.2, 6, 0.2, M.plank, px, y - 3.5, cz);
+      addBox(parent, 0.14, 0.14, d * 0.9, M.plank, px, y - 1.2, cz, false);
+    }
+    return;
+  }
+  addBox(parent, w, 1, d, style === 'crumble' ? crackMats : cave ? caveSlabMats : slabMats, cx, y - 0.5, cz);
 
   // tapering rock body underneath (special platforms get a shorter stub)
   const m = Math.min(w, d) / 2;
@@ -541,7 +644,7 @@ function buildIsland(parent, isl, rnd, style) {
     if (lw < 0.5 || ld < 0.5) break;
     const lh = 0.7 + m * (0.35 + 0.1 * i) * (0.8 + rnd() * 0.4);
     const jx = (rnd() - 0.5) * inset * 0.5, jz = (rnd() - 0.5) * inset * 0.5;
-    addBox(parent, lw, lh, ld, M.rock, cx + jx, top - lh / 2, cz + jz);
+    addBox(parent, lw, lh, ld, cave ? M.caveBrick : M.rock, cx + jx, top - lh / 2, cz + jz);
     top -= lh;
   }
 
@@ -550,8 +653,26 @@ function buildIsland(parent, isl, rnd, style) {
     addBox(parent, 0.3, 0.6, 0.3, glow(0x6fe3ff), x + 0.5, y - 1.35, z + d - 0.35, false);
     addBox(parent, 0.3, 0.6, 0.3, glow(0x6fe3ff), x + w - 0.5, y - 1.35, z + d - 0.35, false);
     addBox(parent, 0.3, 0.3, 0.3, glow(0x6fe3ff), x + w - 0.35, y - 1.2, z + 0.5, false);
+    if (cave) {
+      // a mine lift: it hangs on chains, with a crystal rim so it reads at a glance
+      for (const px of [x + 0.25, x + w - 0.25]) addBox(parent, 0.08, 12, 0.08, flat(0x4a4458), px, y + 6, cz, false);
+      addBox(parent, w, 0.08, 0.1, glow(0x6fe3ff), cx, y + 0.02, z + d, false);
+      addBox(parent, 0.1, 0.08, d, glow(0x6fe3ff), x + w, y + 0.02, cz, false);
+    }
   }
   if (style === 'crumble') return;
+
+  if (cave) {
+    // crystal shards poke out of the two walls the camera sees
+    const shards = Math.round((w + d) / 3);
+    for (let i = 0; i < shards; i++) {
+      const [base] = CRYSTALS[(rnd() * CRYSTALS.length) | 0];
+      const len = 0.25 + rnd() * 0.3;
+      if (rnd() < 0.5) addBox(parent, 0.16, len, 0.14, glow(base), x + 0.3 + rnd() * (w - 0.6), y - 0.6 - rnd() * 1.4, z + d + 0.05, false);
+      else addBox(parent, 0.14, len, 0.16, glow(base), x + w + 0.05, y - 0.6 - rnd() * 1.4, z + 0.3 + rnd() * (d - 0.6), false);
+    }
+    return;
+  }
 
   // vines hanging over the two faces the camera sees
   const vines = Math.round((w + d) / 3);
@@ -597,6 +718,65 @@ function addProp(parent, x, y, z, rnd) {
     const a = addBox(parent, 0.4, 0.3, 0.06, flat(0x6dbb4c), x, y + 0.15, z, false);
     const b = addBox(parent, 0.06, 0.3, 0.4, flat(0x5fae45), x, y + 0.15, z, false);
     a.rotation.y = b.rotation.y = rnd();
+  }
+}
+
+function addCaveProp(parent, x, y, z, rnd) {
+  const k = rnd();
+  if (k < 0.45) addCrystals(parent, x, y, z, rnd, 0.35 + rnd() * 0.3);
+  else if (k < 0.75) {    // loose stone
+    const r = addBox(parent, 0.4, 0.22, 0.34, flat(0x4a4660), x, y + 0.11, z);
+    r.rotation.y = rnd() * Math.PI;
+  } else {                // glinting crystal grit
+    addBox(parent, 0.14, 0.08, 0.14, glow(CRYSTALS[(rnd() * 3) | 0][0]), x, y + 0.04, z, false);
+    addBox(parent, 0.1, 0.06, 0.1, glow(CRYSTALS[(rnd() * 3) | 0][0]), x + 0.2, y + 0.03, z - 0.12, false);
+  }
+}
+
+// the brick mouth of an old mine shaft, built against the back edge of an island
+function buildMine(parent, x, z, y, colliders) {
+  addBox(parent, 3.6, 4.4, 2.2, M.caveBrick, x, y + 1.2, z - 1.1);
+  addBox(parent, 1.5, 2.1, 0.08, flat(0x0c0a12), x, y + 1.05, z + 0.02, false);
+  addBox(parent, 0.22, 2.3, 0.22, M.plank, x - 0.85, y + 1.15, z + 0.12);
+  addBox(parent, 0.22, 2.3, 0.22, M.plank, x + 0.85, y + 1.15, z + 0.12);
+  addBox(parent, 2.1, 0.24, 0.26, M.plank, x, y + 2.3, z + 0.12);
+  for (let k = 0; k < 4; k++) addBox(parent, 1.0, 0.05, 0.16, M.plank, x, y + 0.025, z + 0.25 + k * 0.45, false);
+  for (const rx of [-0.32, 0.32]) addBox(parent, 0.07, 0.06, 1.8, flat(0x8a8a96), x + rx, y + 0.07, z + 0.9, false);
+  addBox(parent, 0.24, 0.28, 0.24, glow(0xffd678), x + 0.85, y + 2.62, z + 0.25, false);
+  const light = new THREE.PointLight(0xffc870, 8, 7);
+  light.position.set(x + 0.85, y + 2.6, z + 0.7);
+  parent.add(light);
+  colliders.push({ minX: x - 1.8, maxX: x + 1.8, minZ: z - 2.2, maxZ: z, minY: y - 1, maxY: y + 3.4, ground: false, off: false });
+}
+
+// what you see beyond the playfield underground: a brick cave wall, stone pillars rising
+// out of the lake, crystals hanging from the unseen ceiling, and old mining scaffolds
+function buildCaveBackdrop(group, b, rnd) {
+  for (let x = b.minX - 18; x < b.maxX + 18;) {
+    const w = 4 + rnd() * 5, h = 36, zz = b.minZ - 16 - rnd() * 5, y0 = b.minY - 20 + rnd() * 4;
+    addBox(group, w, h, 3, M.caveBrick, x + w / 2, y0 + h / 2, zz, false);
+    for (let k = 0; k < 2; k++) addCrystals(group, x + 0.6 + rnd() * (w - 1.2), b.minY + rnd() * 10, zz + 1.6, rnd, 0.7 + rnd() * 0.6);
+    x += w - 0.3;
+  }
+  for (let i = 0; i < 8; i++) {
+    const w = 2 + rnd() * 2.5, d = 2 + rnd() * 2;
+    const x = b.minX - 6 + rnd() * (b.maxX - b.minX + 12), z = b.minZ - 5 - rnd() * 8;
+    const top = b.minY - 2 + rnd() * 9, bottom = b.minY - 22;
+    addBox(group, w, top - bottom, d, M.caveBrick, x, (top + bottom) / 2, z, false);
+    addBox(group, w + 0.2, 0.4, d + 0.2, caveSlabMats, x, top - 0.2, z, false);
+    addCrystals(group, x + (rnd() - 0.5) * w * 0.5, top, z + (rnd() - 0.5) * d * 0.5, rnd, 0.8 + rnd() * 0.7);
+  }
+  for (let i = 0; i < 10; i++) {
+    const x = b.minX - 4 + rnd() * (b.maxX - b.minX + 8), z = b.minZ - 3 - rnd() * 7, y = b.maxY + 6 + rnd() * 5;
+    addBox(group, 0.07, 12, 0.07, flat(0x3a3448), x, y + 6, z, false);
+    addCrystals(group, x, y, z, rnd, 0.9 + rnd() * 0.8, true);
+  }
+  for (let i = 0; i < 4; i++) {
+    const x = b.minX + (i + 0.3 + rnd() * 0.4) * (b.maxX - b.minX) / 4, z = b.minZ - 4 - rnd() * 4;
+    const y0 = b.minY - 5, h = 10 + rnd() * 4;
+    for (const px of [-1.2, 1.2]) addBox(group, 0.22, h, 0.22, M.plank, x + px, y0 + h / 2, z, false);
+    for (let yy = y0 + 2; yy < y0 + h; yy += 2.6) addBox(group, 2.8, 0.18, 0.2, M.plank, x, yy, z, false);
+    addBox(group, 0.25, 0.3, 0.25, glow(0xffd678), x, y0 + h - 0.6, z + 0.2, false);
   }
 }
 
@@ -801,6 +981,123 @@ function makeOwl() {
   return g;
 }
 
+// floating "!" over a character until the raccoon comes close
+function makeMark(color, diamond) {
+  const mark = new THREE.Group();
+  if (diamond) {
+    const m = addBox(mark, 0.26, 0.26, 0.26, glow(color), 0, 0.05, 0, false);
+    m.rotation.set(0, Math.PI / 4, Math.PI / 4);
+  } else {
+    addBox(mark, 0.16, 0.42, 0.16, glow(color), 0, 0.2, 0, false);
+    addBox(mark, 0.16, 0.14, 0.16, glow(color), 0, -0.16, 0, false);
+  }
+  return mark;
+}
+
+// clings flat to a wall, head up, with a glowing crystal shell; built facing +z
+function makeBeetle() {
+  const g = new THREE.Group();
+  const dark = 0x141c30;
+  addBox(g, 0.62, 0.78, 0.22, flat(0x1e2a44), 0, 0, 0.11);
+  addBox(g, 0.5, 0.6, 0.14, glow(0x58c8f0), 0, -0.04, 0.27, false);
+  addBox(g, 0.05, 0.6, 0.04, flat(0x1e2a44), 0, -0.04, 0.35, false);
+  addBox(g, 0.14, 0.16, 0.06, glow(0xbff2ff), -0.13, 0.08, 0.35, false);
+  addBox(g, 0.36, 0.22, 0.2, flat(dark), 0, 0.48, 0.12);
+  addBox(g, 0.08, 0.08, 0.06, glow(0xff5a3c), -0.1, 0.5, 0.24, false);
+  addBox(g, 0.08, 0.08, 0.06, glow(0xff5a3c), 0.1, 0.5, 0.24, false);
+  for (const side of [-1, 1]) {
+    const ant = addBox(g, 0.04, 0.3, 0.04, flat(0x58c8f0), side * 0.12, 0.72, 0.14, false);
+    ant.rotation.z = -side * 0.4;
+  }
+  g.userData.legs = [];
+  for (const side of [-1, 1]) for (let k = 0; k < 3; k++) {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.3, -0.25 + k * 0.25, 0.08);
+    addBox(pivot, 0.3, 0.06, 0.06, flat(dark), side * 0.15, 0, 0, false);
+    g.add(pivot);
+    g.userData.legs.push(pivot);
+  }
+  return g;
+}
+
+// Miner Burmil: a grumpy mole in a hard hat with a lamp, pickaxe over his shoulder
+function makeMole() {
+  const g = new THREE.Group();
+  const body = new THREE.Group();
+  g.add(body);
+  const fur = 0x6e625a, pink = 0xf0a8a8, shirt = 0x7a7048, strap = 0x5a3a24;
+  addBox(body, 0.22, 0.2, 0.32, flat(pink), -0.18, 0.1, 0.06);
+  addBox(body, 0.22, 0.2, 0.32, flat(pink), 0.18, 0.1, 0.06);
+  addBox(body, 0.7, 0.36, 0.55, flat(0x5a5a4a), 0, 0.38, 0);
+  addBox(body, 0.72, 0.56, 0.56, flat(shirt), 0, 0.82, 0);
+  addBox(body, 0.08, 0.56, 0.04, flat(strap), -0.18, 0.82, 0.29, false);
+  addBox(body, 0.08, 0.56, 0.04, flat(strap), 0.18, 0.82, 0.29, false);
+  for (const side of [-1, 1]) {
+    addBox(body, 0.18, 0.45, 0.22, flat(shirt), side * 0.45, 0.8, 0.04);
+    addBox(body, 0.2, 0.15, 0.22, flat(pink), side * 0.45, 0.51, 0.06);
+  }
+  const head = new THREE.Group();
+  head.position.y = 1.32;
+  body.add(head);
+  addBox(head, 0.66, 0.5, 0.6, flat(fur), 0, 0, 0);
+  addBox(head, 0.32, 0.22, 0.26, flat(0x8a7e74), 0, -0.1, 0.38);
+  addBox(head, 0.15, 0.12, 0.08, flat(pink), 0, -0.03, 0.53, false);
+  const eyes = [-0.16, 0.16].map(ex => addBox(head, 0.09, 0.08, 0.04, flat(0x141010), ex, 0.06, 0.31, false));
+  for (const side of [-1, 1]) {   // knitted brows: permanently unimpressed
+    const brow = addBox(head, 0.17, 0.05, 0.04, flat(0x3a322c), side * 0.16, 0.14, 0.32, false);
+    brow.rotation.z = side * 0.35;
+  }
+  addBox(head, 0.76, 0.08, 0.72, flat(0xc89a3a), 0, 0.28, 0.02);
+  addBox(head, 0.56, 0.22, 0.54, flat(0xd8ac44), 0, 0.42, 0);
+  addBox(head, 0.17, 0.15, 0.06, glow(0xfff2a0), 0, 0.42, 0.29, false);
+  const pick = new THREE.Group();
+  pick.position.set(0.5, 0.95, -0.12);
+  pick.rotation.z = 0.55;
+  addBox(pick, 0.08, 1.25, 0.08, M.bark, 0, 0.32, 0);
+  const blade = addBox(pick, 0.78, 0.1, 0.1, flat(0x9aa0a8), 0, 0.92, 0);
+  blade.rotation.z = 0.12;
+  body.add(pick);
+  const mark = makeMark(0xffd23f);
+  g.add(mark);
+  g.userData = { body, head, eyes, mark };
+  return g;
+}
+
+// Irma the fox trader: orange coat, white chest and tail tip, a traveller's backpack
+function makeFox() {
+  const g = new THREE.Group();
+  const body = new THREE.Group();
+  g.add(body);
+  const orange = 0xe0702a, light = 0xf5ead8, dark = 0x3a2418;
+  for (const [lx, lz] of [[-0.17, 0.26], [0.17, 0.26], [-0.17, -0.26], [0.17, -0.26]]) addBox(body, 0.14, 0.32, 0.14, flat(dark), lx, 0.16, lz);
+  addBox(body, 0.5, 0.42, 0.85, flat(orange), 0, 0.52, 0);
+  addBox(body, 0.34, 0.3, 0.1, flat(light), 0, 0.5, 0.45);
+  addBox(body, 0.56, 0.4, 0.42, flat(0x7a5a34), 0, 0.86, -0.14);
+  addBox(body, 0.64, 0.14, 0.16, flat(0x5a7a48), 0, 1.1, -0.14);
+  addBox(body, 0.1, 0.36, 0.06, flat(0x4a3420), -0.2, 0.74, 0.08, false);
+  addBox(body, 0.1, 0.36, 0.06, flat(0x4a3420), 0.2, 0.74, 0.08, false);
+  const head = new THREE.Group();
+  head.position.set(0, 0.9, 0.48);
+  body.add(head);
+  addBox(head, 0.46, 0.38, 0.4, flat(orange), 0, 0, 0);
+  addBox(head, 0.22, 0.17, 0.24, flat(light), 0, -0.08, 0.29);
+  addBox(head, 0.08, 0.07, 0.06, flat(dark), 0, -0.03, 0.42, false);
+  const eyes = [-0.11, 0.11].map(ex => addBox(head, 0.07, 0.08, 0.04, flat(dark), ex, 0.06, 0.21, false));
+  for (const side of [-1, 1]) {
+    addBox(head, 0.13, 0.2, 0.08, flat(orange), side * 0.14, 0.28, -0.02);
+    addBox(head, 0.13, 0.07, 0.09, flat(dark), side * 0.14, 0.4, -0.02, false);
+  }
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.6, -0.42);
+  addBox(tail, 0.26, 0.26, 0.6, flat(orange), 0, 0.05, -0.3);
+  addBox(tail, 0.27, 0.27, 0.18, flat(light), 0, 0.05, -0.66);
+  body.add(tail);
+  const mark = makeMark(0x6fe3ff, true);
+  g.add(mark);
+  g.userData = { body, head, eyes, tail, mark };
+  return g;
+}
+
 const blobGeo = new THREE.CircleGeometry(0.5, 10);
 blobGeo.rotateX(-Math.PI / 2);
 const blobMat = new THREE.MeshBasicMaterial({ color: 0x10202a, transparent: true, opacity: 0.38, depthWrite: false });
@@ -862,10 +1159,11 @@ const rain = [];
 
 const fireflyGroup = new THREE.Group();
 const fireflies = [];
+const fireflyMat = new THREE.MeshBasicMaterial({ color: 0xd8ff7a });
 (function buildFireflies() {
   const geo = new THREE.BoxGeometry(0.09, 0.09, 0.09);
   for (let i = 0; i < 34; i++) {
-    const m = new THREE.Mesh(geo, glow(0xd8ff7a));
+    const m = new THREE.Mesh(geo, fireflyMat);
     fireflyGroup.add(m);
     fireflies.push({ m, ax: 0, ay: 0, az: 0, ph: Math.random() * 20 });
   }
@@ -889,6 +1187,8 @@ function applyTheme(i) {
   spriteTint.setHex(theme.tint);
   rainGroup.visible = !!theme.rain;
   fireflyGroup.visible = !!theme.fireflies;
+  fireflyMat.color.setHex(theme.fireflyColor || 0xd8ff7a);
+  for (const c of clouds) c.g.visible = !theme.cave;
   music.theme = MUSIC[i];
   lightningT = 3;
   lightningFlash = 0;
@@ -897,7 +1197,8 @@ function applyTheme(i) {
 
 // ===========================================================================
 // Levels. Islands are [x, z, width, depth, topY, options]; +x is the way forward.
-// Options: move {axis, dist, period} · crumble · gate (appears when the boss falls) · bare (no trees)
+// Options: move {axis, dist, period} · crumble · gate (appears when the boss falls) · bare (no trees) · bridge (narrow walkway)
+// Cave extras: walls [x, z, w, d, bottomY, topY] · water {low, high, period} · mine [x, z, y] · miner [x, z]
 // ===========================================================================
 const LEVELS = [
   { // 1: tutorial — movement, dash, a travelling island and a bounce pad to the first secret
@@ -1029,8 +1330,181 @@ const LEVELS = [
     ],
     cabin: [87, -1.5, 7],
     goal: [84.5, 2.5, 7]
+  },
+  // ---- Chapter 2: below the mountain ----
+  { // 6: crystal caves — a tidal lake that floods the low bridges, mine lifts, wall-crawling beetles
+    name: 'Кришталеві печери', chapter: 2, theme: 5, par: 100, spawn: [-1, 0, 1],
+    islands: [
+      [-4, -4, 9, 8, 1],
+      [5.5, -0.7, 6.5, 1.4, 0, { bridge: true }],
+      [12, -3, 6, 6, 1.5],
+      [20.5, -1.5, 3, 3, 2.2, { move: { axis: 'y', dist: 3.4, period: 5 } }],
+      [26, -4, 7, 7, 4.5],
+      [33.5, -0.7, 7, 1.4, 4.5, { bridge: true }],
+      [34.5, 1.8, 4, 3.4, 1.5],
+      [41.5, -1.2, 2.5, 2.5, 4, { crumble: true }], [45.5, -1.5, 2.5, 2.5, 3.5, { crumble: true }],
+      [49.5, -4, 8, 7, 3],
+      [57.5, -0.7, 6, 1.4, 0, { bridge: true }],
+      [64, -1.5, 3, 3, 2, { move: { axis: 'y', dist: 3, period: 4.5 } }],
+      [68.5, -4, 8, 8, 4]
+    ],
+    walls: [[27.5, -6.2, 2.2, 2.2, -6, 10], [52.5, -6.4, 2.4, 2.4, -6, 9]],
+    water: { low: -3.2, high: 0.35, period: 10 },
+    mine: [1.2, -4, 1],
+    miner: [3.4, -2.6],
+    discs: [[1, 1.5, 1], [3.5, -1.5, 1], [8.7, 0, 0], [14, -1.5, 1.5], [28, 0.5, 4.5], [37, 0, 4.5], [51.5, -2, 3], [55.5, 1.8, 3], [60.5, 0, 0], [71, -2, 4], [73, 2.5, 4]],
+    gems: [[6.8, 0, 0], [10.4, 0, 0], [42.7, 0, 4], [46.7, -0.2, 3.5], [59, 0, 0], [62, 0, 0], [35.6, 4.4, 1.5, 5], [36.9, 4.4, 1.5, 5]],
+    powerups: [['shield', 30, -2.4, 4.5], ['heart', 35.4, 2.6, 1.5]],
+    pads: [[37.7, 2.7, 1.5, 17]],
+    secret: [36.2, 4.1, 1.5, 1.6],
+    hints: [
+      { x: 4.5, z: 0, r: 1.6, text: 'Фіолетова вода прибуває хвилями — не стій на низьких містках, коли вона росте' },
+      { x: 27.5, z: 0.5, r: 2, text: 'Кришталеві жуки повзають по стінах — бий диском, коли спустяться' }
+    ],
+    enemies: [
+      { type: 'walker', a: [13, 1.8], b: [17, 1.8], y: 1.5, speed: 1.8 },
+      { type: 'beetle', at: [28.6, -3.75], y0: 4.9, y1: 9, speed: 1.4 },
+      { type: 'spitter', at: [31.5, 1.6], y: 4.5 },
+      { type: 'beetle', at: [53.7, -3.75], y0: 3.4, y1: 7.5, speed: 1.8 },
+      { type: 'chaser', at: [54, 0.5], y: 3 },
+      { type: 'walker', a: [70, 2.2], b: [75, 2.2], y: 4, speed: 2.2 }
+    ],
+    goal: [74.5, -0.5, 4]
+  },
+  { // 7: a river under the cavern — the low bridge floods, a lift and crumbling stones lead on
+    name: 'Підземна ріка', chapter: 2, theme: 5, par: 95, spawn: [-2, 0, 1],
+    islands: [
+      [-5, -3, 8, 6, 1],
+      [6, -2, 3.2, 3.5, 1.2],
+      [12.2, -1, 6, 2, 0, { bridge: true }],
+      [21.2, -3, 3, 3.5, 1.6],
+      [27, -1.5, 3, 3, 3.2, { move: { axis: 'y', dist: 2.8, period: 3.4 } }],
+      [33, -3.5, 3, 3.5, 4.2],
+      [39, -1, 3, 3, 3.4, { crumble: true }],
+      [44.5, -4, 8, 8, 4.6]
+    ],
+    walls: [[21.7, -5.5, 2, 2, -6, 6]],
+    water: { low: -3.5, high: 0.6, period: 7 },
+    discs: [[1.5, -1.5, 1], [7.5, -0.5, 1.2], [15, -0.5, 0], [22.5, -1.2, 1.6], [28.5, 0, 3.2], [34.5, -2.5, 4.2], [40.5, 0.5, 3.4], [47, -2.5, 4.6]],
+    gems: [[2, 0, 1], [34, -1.2, 4.2], [41, 0.5, 3.4, 5]],
+    powerups: [['triple', 33.5, -2, 4.2]],
+    secret: [47.5, 2.5, 4.6, 1.6],
+    hints: [
+      { x: 15, z: 0, r: 1.8, text: 'Міст затоплює, коли вода піднімається — перебігай, поки вона внизу' },
+      { x: 40.5, z: -0.5, r: 1.6, text: 'Сірі плити кришаться — не зупиняйся на них' }
+    ],
+    enemies: [
+      { type: 'walker', a: [7, -1.2], b: [8.5, -1.2], y: 1.2, speed: 2.4 },
+      { type: 'beetle', at: [22.7, -3.25], y0: 2.1, y1: 6, speed: 1.8 },
+      { type: 'chaser', at: [34.5, -1.8], y: 4.2 },
+      { type: 'spitter', at: [48.5, -2.5], y: 4.6 }
+    ],
+    goal: [50.5, -0.5, 4.6]
+  },
+  { // 8: iron bridges over a gorge, with wind that pushes the raccoon mid-jump
+    name: 'Залізні мости', chapter: 2, theme: 5, par: 105, spawn: [-2, 0, 1],
+    islands: [
+      [-5, -2, 7, 5, 1],
+      [5, 0.5, 3, 3, 1.2, { move: { axis: 'x', dist: 4, period: 3.5 } }],
+      [11, -2, 3.2, 3.5, 2.8],
+      [17, -3.5, 3, 3, 3.8, { crumble: true }],
+      [22.5, -1, 3, 3, 5, { move: { axis: 'y', dist: 3, period: 4.2 } }],
+      [27.5, -4, 4.5, 6, 6],
+      [35, -1.5, 3, 3, 5],
+      [41, -4, 8, 6, 3.2]
+    ],
+    wind: [{ x: 19.5, z: -6.5, w: 4, d: 7, y: 2, h: 7, dir: [0, 1], push: 3.6, period: 4, duty: 0.6 }],
+    discs: [[-1.5, 0, 1], [12, -0.5, 2.8], [18, -2.5, 3.8], [23.5, 0, 5], [30, -2, 6], [36, -0.5, 5], [44, -2, 3.2]],
+    gems: [[1, 0.5, 1], [12.5, -1, 2.8], [28.5, -1.5, 6, 5], [42.5, -1, 3.2]],
+    powerups: [['speed', 30.5, -3, 6], ['heart', 43, 1, 3.2]],
+    secret: [44, -3, 3.2, 1.6],
+    hints: [
+      { x: 3, z: 0, r: 1.8, text: 'Міст рухається — стрибай, коли він поруч' },
+      { x: 19.5, z: -2, r: 2, text: 'Вітер зносить у стрибку — перечекай порив' }
+    ],
+    enemies: [
+      { type: 'walker', a: [28.5, -2.5], b: [31, -2.5], y: 6, speed: 2.8 },
+      { type: 'flyer', a: [13, 1], b: [21, 1], y: 4.6, speed: 3, phase: 0 },
+      { type: 'chaser', at: [12, -0.5], y: 2.8 },
+      { type: 'spitter', at: [43, -2], y: 3.2 }
+    ],
+    goal: [47, -1, 3.2]
+  },
+  { // 9: the guardian — a mini boss holds the flag until it falls
+    name: 'Страж глибин', chapter: 2, theme: 5, par: 120, spawn: [-1.5, 0, 1],
+    islands: [
+      [-4, -3, 8, 6, 1],
+      [7, -1.5, 3, 3, 1.8],
+      [13, -3, 3, 3, 2.8, { crumble: true }],
+      [19, -1, 3, 3, 3.4],
+      [25, -4, 3, 3, 4.2, { crumble: true }],
+      [31, -1.5, 3, 3, 3.6, { move: { axis: 'x', dist: 3.5, period: 3.8 } }],
+      [37, -3.5, 3.5, 6, 4.6],
+      [43.5, 1, 3, 3, 5.2],
+      [47, -5, 11, 11, 4.4, { bare: true }],
+      [59.5, -2, 3, 3, 4.2]
+    ],
+    discs: [[1, -1, 1], [3, 1, 1], [8, -0.5, 1.8], [14, -2, 2.8], [20, 0.5, 3.4], [26, -3, 4.2], [38.5, -2, 4.6], [50, -3, 4.4], [54, 2, 4.4]],
+    gems: [[7.5, -0.5, 1.8], [20, -0.2, 3.4], [32, -0.5, 3.6, 5], [56, -3, 4.4]],
+    powerups: [['triple', 44.5, 2, 5.2]],
+    secret: [-2.5, -2, 1, 1.6],
+    hints: [{ x: 0, z: 0, r: 2.5, text: 'Страж у кінці печер починає з ривка — ухиляйся вбік' }],
+    enemies: [
+      { type: 'walker', a: [-2, 1.5], b: [1, 1.5], y: 1, speed: 1.8 },
+      { type: 'chaser', at: [20, 0.5], y: 3.4 },
+      { type: 'spitter', at: [38.5, -2.5], y: 4.6 },
+      { type: 'boss', at: [52, -0.5], y: 4.4, mini: true }
+    ],
+    goal: [61, -0.5, 4.2]
+  },
+  { // 10: the heart of the caves — lifts, crumbling stones and a long way down to the glowing core
+    name: 'Серце печер', chapter: 2, theme: 5, par: 130, spawn: [-1.5, 0, 1],
+    islands: [
+      [-4, -4, 9, 8, 1],
+      [8, -2, 3, 3, 1.8, { move: { axis: 'y', dist: 2.8, period: 4 } }],
+      [14, -3.5, 3, 3, 2.6, { crumble: true }],
+      [20, -1, 3, 3, 2.8, { crumble: true }],
+      [25.5, -3, 3, 3, 3.7],
+      [32, 0, 3, 3, 4.2],
+      [38, -3.5, 3, 3, 5.4],
+      [44, -1, 3, 3, 6.4, { crumble: true }],
+      [49.5, -4, 5.5, 7, 6],
+      [58, -1, 3, 3, 7.4, { move: { axis: 'y', dist: 2.4, period: 4.5 } }],
+      [64, -4, 8, 8, 6.8]
+    ],
+    walls: [[39, -5.5, 2, 2, -2, 11]],
+    discs: [[0, -1.5, 1], [9, -0.5, 1.8], [15, -2.5, 2.6], [21, 0, 2.8], [27, -1.8, 4], [33, 1, 4.2], [39, -2, 5.4], [45, 0, 6.4], [51, -2, 6], [59, 0, 7.4], [67, -2, 6.8]],
+    gems: [[3, -2, 1], [15, -3, 2.6, 5], [33, -0.5, 4.2], [52, -2, 6], [66, -2, 6.8, 5]],
+    powerups: [['shield', 27, -2.5, 4], ['heart', 51, 1, 6]],
+    secret: [67.5, -2.5, 6.8, 1.6],
+    hints: [
+      { x: -1.5, z: 0, r: 1.8, text: 'Тут треба вміти чекати: ліфти ходять по колу' },
+      { x: 39.5, z: -1.6, r: 1.6, text: 'Жук на стіні спускається й піднімається — пройди, коли він угорі' }
+    ],
+    enemies: [
+      { type: 'walker', a: [-2, -2], b: [2, -2], y: 1, speed: 2.4 },
+      { type: 'beetle', at: [40, -3.25], y0: 5.9, y1: 10.5, speed: 2 },
+      { type: 'flyer', a: [27, -2.5], b: [33, 1], y: 5.6, speed: 3, phase: 0 },
+      { type: 'spitter', at: [51, -2.5], y: 6 },
+      { type: 'chaser', at: [66, -1.5], y: 6.8 },
+      { type: 'walker', a: [65, -3], b: [69, -3], y: 6.8, speed: 3 }
+    ],
+    goal: [69.5, -0.5, 6.8]
   }
 ];
+
+// Chapters: the floating islands up to the cabin, then the caves under the mountain
+const CHAPTERS = [
+  { name: 'Летючі острови', outro: 'Єнот здолав Тіньового Володаря й дістався хатинки на вершині. Та під горою щось світиться…' },
+  { name: 'Кришталеві печери', outro: 'Єнот вибрався з Кришталевих печер із повним рюкзаком кристалів. Далі буде…' }
+];
+const chapterOf = (i) => LEVELS[i].chapter || 1;
+// "Глава 2 · Рівень 1 / 1"
+function levelLabel(i) {
+  const c = chapterOf(i);
+  const inChapter = LEVELS.filter(l => (l.chapter || 1) === c);
+  return `Глава ${c} · Рівень ${inChapter.indexOf(LEVELS[i]) + 1} / ${inChapter.length}`;
+}
 
 // ---------------------------------------------------------------------------
 // The wandering owl: a character with a name plate who turns up several times
@@ -1069,6 +1543,57 @@ function planNpcs() {
   return plan;
 }
 const npcPlan = planNpcs();
+
+// Miner Burmil guards the mouth of his mine in the caves and grumbles a new line at every visit
+const MINER_NAME = 'Шахтар Бурміл';
+const MINER_TEXTS = [
+  'Ох, пане Дослідник… Чого ви тут шукаєте? Кристальні печери — не місце для прогулянок! Якщо вже прийшли — секрет шукайте під старим мостом, але не впадіть.',
+  'Вода тут дихає: прибуває й відступає. Низькі містки заливає першими — перебігайте, поки вона внизу.',
+  'Кристальні жуки кишать на стінах. Спускаються — і назад. Диском їх, диском!',
+  'Камінь — він чесний. Не кришиться, не бреше. На відміну від тих сірих плит попереду.',
+  'Ліфти на ланцюгах я сам лагодив. Не розгойдуйте їх дарма, пане Дослідник.',
+  'Сорок років копаю. Жодного разу не бачив, щоб єнот приніс щось корисне. Здивуйте мене.',
+  'Блакитний кристал — для світла, фіолетовий — для краси, зелений — для настрою. А вам — дорога вперед.',
+  'По островах шастає лисиця, міняє диски на кристали. Хитра, але не шахрайка.',
+  'Тихіше! Камінь слухає. …Ні, жартую. Але все одно тихіше.',
+  'Ідіть собі, не заважайте працювати!'
+];
+
+// Irma the fox trader turns up exactly once per run, on a random island of a random level
+const FOX_NAME = 'Лисичка Ірма', FOX_PRICE = 3;
+const FOX_OFFER = `Обміняю ${FOX_PRICE} кристали на 1 диск. [E] — так · [Esc] — ні`;
+const foxPlan = { level: (Math.random() * LEVELS.length) | 0 };
+
+function trader() {
+  const n = level && level.talking;
+  return mode === 'playing' && n && n.kind === 'fox' && !n.declined ? n : null;
+}
+function acceptTrade() {
+  const n = trader();
+  if (!n) return;
+  if (run.gems < FOX_PRICE) {
+    n.msg = `Бракує кристалів, єноте. ${FOX_PRICE} — і диск твій!`;
+    n.msgT = 1.8;
+    sfxDeny();
+    return;
+  }
+  run.gems -= FOX_PRICE;
+  run.ammo++;
+  renderGems();
+  renderAmmo();
+  n.msg = 'Чесна угода! Ще одну?';
+  n.msgT = 1.4;
+  popup('+1 диск', player.x, player.y + 2.2, player.z, 'gold');
+  burst(n.x, n.y + 1, n.z, 0x9fe0ff, 8, 3);
+  sfxTrade();
+}
+function declineTrade() {
+  const n = trader();
+  if (!n) return;
+  n.declined = true;
+  n.msg = 'Ну, як знаєш. Я ще тут покручусь.';
+  n.msgT = 1.6;
+}
 
 // ---------------------------------------------------------------------------
 // The hero himself: once or twice per run the raccoon pops up at the edge of
@@ -1337,7 +1862,7 @@ function takePhoto() {
   const name = LEVELS[levelIndex] ? LEVELS[levelIndex].name : '';
   g.fillStyle = '#ffd23f';
   g.font = 'bold 14px "Courier New", monospace';
-  g.fillText(`Пригода Єнота-Дослідника · Рівень ${levelIndex + 1}: ${name}`, w / 2, PAD * 2 + src.height + 17);
+  g.fillText(`Пригода Єнота-Дослідника · ${levelLabel(levelIndex)}: ${name}`, w / 2, PAD * 2 + src.height + 17);
   g.fillStyle = '#fff';
   g.font = '11px "Courier New", monospace';
   g.fillText(`${fmtTime(stats.time)}  ·  ${run.score} очок  ·  ${new Date().toLocaleDateString('uk-UA')}`, w / 2, PAD * 2 + src.height + 31);
@@ -1402,12 +1927,15 @@ const SHOP = [
 
 function showShop(res) {
   const def = LEVELS[levelIndex], next = LEVELS[levelIndex + 1];
+  const chapter = chapterOf(levelIndex), nextChapter = chapterOf(levelIndex + 1);
+  const chapterDone = nextChapter !== chapter;
   const items = SHOP.map((it) => {
     const ok = it.can();
     return `<button data-id="${it.id}" ${ok && run.gems >= it.cost ? '' : 'disabled'}>${it.name} <span class="cost">◆${it.cost}</span><small>${ok ? it.desc : it.no}</small></button>`;
   }).join('');
   overlay.innerHTML = `
-    <h1>Рівень ${levelIndex + 1} пройдено!</h1>
+    <h1>${chapterDone ? `Главу ${chapter} пройдено!` : `${levelLabel(levelIndex).split(' · ')[1]} пройдено!`}</h1>
+    ${chapterDone ? `<p>${CHAPTERS[chapter - 1].outro}</p>` : ''}
     ${starsHtml(res.stars)}
     <div class="result">
       Час: ${fmtTime(stats.time)} (ціль ${fmtTime(def.par)}) · ${stats.damaged ? 'є ушкодження' : 'без ушкоджень'} · ${stats.secret ? 'секрет знайдено' : 'секрет не знайдено'}<br>
@@ -1415,7 +1943,7 @@ function showShop(res) {
     </div>
     <div class="shopTitle">Крамниця · кристалів: ${run.gems}</div>
     <div class="shop">${items}</div>
-    <button id="nextBtn" class="main">Далі: «${next.name}» →</button>`;
+    <button id="nextBtn" class="main">${chapterDone ? `Глава ${nextChapter}: «${next.name}»` : `Далі: «${next.name}»`} →</button>`;
   overlay.classList.remove('hidden');
   toastEl.classList.add('hidden');
   hideHero();
@@ -1435,7 +1963,7 @@ function showShop(res) {
     mode = 'playing';
   });
 }
-function showEndScreen(title, text, button) {
+function showEndScreen(title, text, button, onRestart = () => location.reload()) {
   const stars = run.stars.reduce((a, b) => a + (b || 0), 0);
   const record = saveBest();
   const best = loadBest();
@@ -1448,13 +1976,26 @@ function showEndScreen(title, text, button) {
   toastEl.classList.add('hidden');
   hideHero();
   bossBarEl.classList.add('hidden');
-  $('restartBtn').addEventListener('click', () => location.reload());
+  $('restartBtn').addEventListener('click', onRestart);
 }
 function showWinScreen() {
-  showEndScreen('Ти вдома!', `Єнот здолав Тіньового Володаря, пройшов усі ${LEVELS.length} рівнів і повернувся до затишної хатинки на вершині.`, 'Грати знову');
+  const c = chapterOf(levelIndex);
+  showEndScreen(`Главу ${c} пройдено!`, CHAPTERS[c - 1].outro, 'Грати знову');
+}
+// the first level of the chapter that the current level belongs to
+function chapterStart(i) {
+  let s = i;
+  while (s > 0 && chapterOf(s - 1) === chapterOf(i)) s--;
+  return s;
+}
+function restartChapter() {
+  overlay.classList.add('hidden');
+  run.hearts = run.maxHearts;
+  loadLevel(chapterStart(levelIndex));
+  mode = 'playing';
 }
 function showGameOverScreen() {
-  showEndScreen('Гру закінчено', `Тіньові істоти здолали єнота на рівні ${levelIndex + 1} / ${LEVELS.length}.`, 'Спробувати знову');
+  showEndScreen('Гру закінчено', `Тіньові істоти здолали єнота: ${levelLabel(levelIndex)} · ${LEVELS[levelIndex].name}.`, 'Спробувати знову', restartChapter);
 }
 
 // ===========================================================================
@@ -1883,6 +2424,13 @@ function spawnEnemy(d, group, isles) {
       model: flyer ? makeFlyer() : makeWalker()
     });
     if (flyer) { e.blob = makeBlob(); group.add(e.blob); }
+  } else if (d.type === 'beetle') {
+    // crawls up and down a wall between y0 and y1; never leaves it, so it can't drop on the raccoon
+    Object.assign(e, {
+      x: d.at[0], z: d.at[1], y0: d.y0, y1: d.y1, len: d.y1 - d.y0, u: Math.random(), dir: 1, speed: d.speed,
+      face: d.face || 'z', hp: 2, half: 0.45, h: 0.8, score: 150, gems: 1, model: makeBeetle()
+    });
+    e.baseY = e.y0 + e.len * e.u - e.h / 2;
   } else {
     const isl = islandAt(isles, d.at[0], d.at[1]);
     e.x = e.hx = d.at[0];
@@ -1958,10 +2506,10 @@ function loadLevel(index) {
     const o = a[5] || {};
     const isl = {
       x: a[0], z: a[1], w: a[2], d: a[3], y: a[4], move: o.move || null, crumble: !!o.crumble, gate: !!o.gate, bare: !!o.bare,
-      off: 0, state: o.gate ? 'hidden' : 'idle', timer: 0, delay: 0, fallV: 0, group: new THREE.Group()
+      bridge: !!o.bridge, off: 0, state: o.gate ? 'hidden' : 'idle', timer: 0, delay: 0, fallV: 0, group: new THREE.Group()
     };
     isl.fixed = !isl.move && !isl.crumble;
-    buildIsland(isl.group, isl, rnd, isl.crumble ? 'crumble' : isl.move ? 'move' : 'grass');
+    buildIsland(isl.group, isl, rnd, isl.crumble ? 'crumble' : isl.move ? 'move' : isl.bridge ? 'bridge' : 'grass');
     isl.col = { minX: isl.x, maxX: isl.x + isl.w, minZ: isl.z, maxZ: isl.z + isl.d, minY: isl.y - 2.5, maxY: isl.y, ground: true, off: isl.gate, isl };
     if (isl.gate) isl.group.visible = false;
     group.add(isl.group);
@@ -1991,8 +2539,30 @@ function loadLevel(index) {
     chimney = buildCabin(group, def.cabin[0], def.cabin[2], def.cabin[1], colliders);
     block(def.cabin[0], def.cabin[1], 3.6);
   }
-  // the owl perches at a random free spot on one of the larger solid islands (never in a boss arena)
+  // cave pillars: brick columns rising out of the lake, crowned with crystals
+  for (const [x, z, w, d, y0, y1] of def.walls || []) {
+    addBox(group, w, y1 - y0, d, M.caveBrick, x + w / 2, (y0 + y1) / 2, z + d / 2);
+    addCrystals(group, x + w / 2, y1, z + d / 2, rnd, 1.1);
+    colliders.push({ minX: x, maxX: x + w, minZ: z, maxZ: z + d, minY: y0, maxY: y1, ground: true, off: false });
+    b.minX = Math.min(b.minX, x); b.minZ = Math.min(b.minZ, z);
+  }
+  if (def.mine) {
+    buildMine(group, def.mine[0], def.mine[1], def.mine[2], colliders);
+    block(def.mine[0], def.mine[1] + 0.9, 2);
+  }
   const npcs = [];
+  if (def.miner) {
+    const [mx, mz] = def.miner;
+    const my = islandAt(isles, mx, mz).y;
+    const model = makeMole();
+    model.scale.setScalar(1.25);
+    model.position.set(mx, my, mz);
+    group.add(model);
+    colliders.push({ minX: mx - 0.4, maxX: mx + 0.4, minZ: mz - 0.4, maxZ: mz + 0.4, minY: my, maxY: my + 2, ground: false, off: false });
+    block(mx, mz, 2.5);
+    npcs.push({ kind: 'mole', name: MINER_NAME, lines: MINER_TEXTS, line: -1, plateY: 3.2, x: mx, y: my, z: mz, model, near: false });
+  }
+  // the owl perches at a random free spot on one of the larger solid islands (never in a boss arena)
   const perches = isles.filter(i => i.fixed && !i.gate && !i.bare && i.w >= 4 && i.d >= 4);
   for (const text of npcPlan[index]) {
     let placed = false;
@@ -2007,17 +2577,40 @@ function loadLevel(index) {
       isl.group.add(model);
       colliders.push({ minX: nx - 0.4, maxX: nx + 0.4, minZ: nz - 0.4, maxZ: nz + 0.4, minY: isl.y, maxY: isl.y + 1.9, ground: false, off: false });
       block(nx, nz, 2.5);
-      npcs.push({ x: nx, y: isl.y, z: nz, text, model, near: false });
+      npcs.push({ kind: 'owl', name: NPC_NAME, plateY: 2.5, x: nx, y: isl.y, z: nz, text, model, near: false });
       placed = true;
     }
     // nowhere to perch here: the owl flies on and meets the raccoon on the next level instead
     if (!placed && index + 1 < LEVELS.length && !npcPlan[index + 1].includes(text)) npcPlan[index + 1].push(text);
   }
+  // the fox sets up shop well away from the start and from any boss
+  if (foxPlan.level === index) {
+    const spots = isles.filter(i => i.fixed && !i.gate && !i.bare && !i.bridge && i.w >= 3 && i.d >= 3);
+    const boss = def.enemies.find(e => e.type === 'boss');
+    let placed = false;
+    for (let tries = 0; tries < 200 && spots.length && !placed; tries++) {
+      const isl = spots[(Math.random() * spots.length) | 0];
+      const nx = isl.x + 0.9 + Math.random() * (isl.w - 1.8), nz = isl.z + 0.9 + Math.random() * (isl.d - 1.8);
+      if (!blocked.every(o => (o.x - nx) ** 2 + (o.z - nz) ** 2 > (o.r * 0.6 + 0.6) ** 2)) continue;
+      if (Math.hypot(nx - def.spawn[0], nz - def.spawn[1]) < 8) continue;
+      if (boss && Math.hypot(nx - boss.at[0], nz - boss.at[1]) < 8) continue;
+      if (npcs.some(o => Math.hypot(nx - o.x, nz - o.z) < 6)) continue;
+      const model = makeFox();
+      model.scale.setScalar(1.3);
+      model.position.set(nx, isl.y, nz);
+      isl.group.add(model);
+      colliders.push({ minX: nx - 0.4, maxX: nx + 0.4, minZ: nz - 0.4, maxZ: nz + 0.4, minY: isl.y, maxY: isl.y + 1.3, ground: false, off: false });
+      block(nx, nz, 2.5);
+      npcs.push({ kind: 'fox', name: FOX_NAME, plateY: 2.5, x: nx, y: isl.y, z: nz, model, near: false, declined: false, msg: '', msgT: 0 });
+      placed = true;
+    }
+    if (!placed) foxPlan.level = index + 1 < LEVELS.length ? index + 1 : -1;
+  }
   // trees get an extra margin: their crowns would otherwise hide pickups and paths
   const treeFree = (x, z) => blocked.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > (o.r + 1.2) ** 2);
   const propFree = (x, z) => blocked.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > (o.r * 0.5) ** 2);
 
-  let lanterns = 0;
+  let lanterns = 0, crystalLights = 0;
   for (const isl of isles) {
     if (isl.fixed && !isl.gate && !isl.bare && isl.w >= 5 && isl.d >= 5) {
       const want = Math.min(4, Math.floor(isl.w * isl.d / 24));
@@ -2025,7 +2618,8 @@ function loadLevel(index) {
         const x = isl.x + 0.9 + rnd() * (isl.w - 1.8);
         const z = isl.z + 0.7 + rnd() * Math.min(isl.d * 0.2, 1.6);   // back strip only, so trees never block or hide the path
         if (!treeFree(x, z)) continue;
-        addTree(isl.group, x, isl.y, z, rnd, colliders);
+        if (theme.cave) addCrystalTree(isl.group, x, isl.y, z, rnd, colliders, crystalLights++ < 4);
+        else addTree(isl.group, x, isl.y, z, rnd, colliders);
         block(x, z, 1.2);
         placed++;
       }
@@ -2034,17 +2628,30 @@ function loadLevel(index) {
         lanterns++;
       }
     }
-    if (!isl.crumble) {
+    if (!isl.crumble && !isl.bridge) {
       const props = Math.floor(isl.w * isl.d / 5);
       for (let i = 0; i < props; i++) {
         const x = isl.x + 0.3 + rnd() * (isl.w - 0.6), z = isl.z + 0.3 + rnd() * (isl.d - 0.6);
-        if (propFree(x, z)) addProp(isl.group, x, isl.y, z, rnd);
+        if (propFree(x, z)) (theme.cave ? addCaveProp : addProp)(isl.group, x, isl.y, z, rnd);
       }
     }
   }
 
-  // unreachable scenery islands off to the north
-  for (let i = 0; i < 7; i++) {
+  let water = null;
+  if (def.water) {
+    // the lake reaches back to the far cave wall and well out toward the camera
+    const W = b.maxX - b.minX + 120, north = b.minZ - 15, south = b.maxZ + 40;
+    texWater.repeat.set(W / 4, (south - north) / 4);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, south - north), waterMat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set((b.minX + b.maxX) / 2, def.water.low, (north + south) / 2);
+    group.add(mesh);
+    water = { ...def.water, mesh, y: def.water.low };
+  }
+
+  // unreachable scenery: islands off to the north, or the cave beyond the playfield
+  if (theme.cave) buildCaveBackdrop(group, b, rnd);
+  else for (let i = 0; i < 7; i++) {
     const w = 3 + rnd() * 4, d = 3 + rnd() * 3;
     const isl = {
       x: b.minX - 10 + rnd() * (b.maxX - b.minX + 20), z: b.minZ - 13 - rnd() * 15,
@@ -2059,7 +2666,7 @@ function loadLevel(index) {
   scene.add(group);
 
   level = {
-    def, group, colliders, isles, chimney, flag, npcs, talking: null, bounds: b,
+    def, group, colliders, isles, chimney, flag, npcs, talking: null, bounds: b, water,
     pickups: [], enemies: [], boss: null, locked: false,
     spikes: (def.spikes || []).map(s => buildSpikes(group, s)),
     pads: (def.pads || []).map(p => buildPad(group, p)),
@@ -2112,10 +2719,11 @@ function loadLevel(index) {
   hideHero();
   heroTimer = index in heroPlan ? 2.5 + Math.random() * 7 : 0;   // a random moment early in the level
 
-  levelIndicatorEl.textContent = `Рівень ${index + 1} / ${LEVELS.length} · ${def.name}`;
+  levelIndicatorEl.textContent = `${levelLabel(index)} · ${def.name}`;
   renderHearts(); renderAmmo(); renderGems(); renderBuffs(); renderCombo(); renderBossBar();
   scoreEl.textContent = run.score;
-  toast(`Рівень ${index + 1}: ${def.name}`, 2.2);
+  const opensChapter = index > 0 && chapterOf(index) !== chapterOf(index - 1);
+  toast(opensChapter ? `Глава ${chapterOf(index)}: ${def.name}` : `${levelLabel(index)}: ${def.name}`, opensChapter ? 3.2 : 2.2);
 }
 
 function setFlagLocked(locked) {
@@ -2483,7 +3091,8 @@ function updatePlayer(dt) {
   }
 
   // --- dash: a short burst with invulnerability; one per airtime ---
-  const dashDown = isDown('ShiftLeft', 'ShiftRight', 'KeyE');   // E as well: tapping Shift five times opens Sticky Keys on Windows
+  // E as well: tapping Shift five times opens Sticky Keys on Windows. Next to the fox, E trades instead.
+  const dashDown = isDown('ShiftLeft', 'ShiftRight') || (!trader() && isDown('KeyE'));
   if (dashDown && !dashKeyPrev && !stunned && dashCd <= 0 && dashT <= 0 && (player.onGround || !airDashUsed)) {
     dashT = DASH_TIME;
     dashCd = dashCooldown();
@@ -2624,6 +3233,29 @@ function updateTraps(dt) {
       dust(p.x, p.y + 0.5, p.z, 6);
       sfxBounce();
     }
+  }
+}
+
+// the cave lake breathes: it slowly rises over the low bridges and sinks back
+function updateWater() {
+  const w = level.water;
+  if (!w) return;
+  w.y = w.low + (w.high - w.low) * (0.5 - 0.5 * Math.cos(lt / w.period * Math.PI * 2));
+  w.mesh.position.y = w.y;
+  texWater.offset.set(lt * 0.03, lt * 0.017);
+  if (player.y > w.y - 0.12) return;
+  const floor = groundBelow(player.x, player.z, player.y + 0.1);
+  if (floor !== null && floor > w.low) {
+    // a flooded walkway: the surge knocks him about, but it's not a fall
+    if (damagePlayer(player.x - player.fx, player.z - player.fz)) {
+      player.vy = 9;
+      burst(player.x, w.y + 0.1, player.z, 0x9a6aff, 8, 3);
+      sfxSplash();
+    }
+  } else {
+    burst(player.x, w.y + 0.1, player.z, 0x9a6aff, 10, 4);
+    sfxSplash();
+    resetPlayer();
   }
 }
 
@@ -3001,6 +3633,11 @@ function poseEnemy(e, t) {
     head.rotation.y = Math.atan2(e.dirX, e.dirZ);
     head.scale.setScalar(e.state === 'charge' ? 1 + (1 - e.timer / 0.6) * 0.3 : 1);
     return;
+  } else if (e.type === 'beetle') {
+    m.position.set(e.x, (e.minY + e.maxY) / 2, e.z);
+    m.rotation.set(0, e.face === 'x' ? Math.PI / 2 : 0, e.dir > 0 ? 0 : Math.PI);
+    m.userData.legs.forEach((leg, i) => { leg.rotation.z = Math.sin(t * 14 + i * 2.1) * 0.35; });
+    return;
   } else {
     const wind = e.state.endsWith('Wind');
     m.position.set(e.x + (wind ? (Math.random() - 0.5) * 0.12 : 0), e.minY, e.z);
@@ -3032,7 +3669,13 @@ function updateEnemies(dt, t, active) {
         }
       } else if (e.type === 'chaser') updateChaser(e, dt);
       else if (e.type === 'spitter') updateSpitter(e, dt);
-      else updateBoss(e, dt);
+      else if (e.type === 'beetle') {
+        e.u += e.dir * e.speed * dt / e.len;
+        if (e.u > 1) { e.u = 1; e.dir = -1; }
+        if (e.u < 0) { e.u = 0; e.dir = 1; }
+        const cy = e.y0 + e.len * e.u;
+        e.minY = cy - e.h / 2; e.maxY = cy + e.h / 2;
+      } else updateBoss(e, dt);
 
       if (e.alive && (e.type !== 'boss' || e.awake) &&
         Math.abs(player.x - e.x) < PR + e.half && Math.abs(player.z - e.z) < PR + e.half &&
@@ -3156,28 +3799,49 @@ function updateAmbient(dt, t) {
   if (!level.locked && level.flag.cloth.position.y < 2.8) level.flag.cloth.position.y = Math.min(2.8, level.flag.cloth.position.y + dt * 2);
   level.talking = null;
   for (const n of level.npcs) {
-    const { bird, head, eyes, mark } = n.model.userData;
+    const u = n.model.userData;
     const dx = player.x - n.x, dz = player.z - n.z;
     const near = mode === 'playing' && Math.hypot(dx, dz) < 4.2 && Math.abs(player.y - n.y) < 3;
-    if (near && !n.near) sfxHoot();
-    n.near = near;
-    if (near && !level.talking) {
-      level.talking = n;
-      if (npcTextEl.textContent !== n.text) {
-        npcNameEl.textContent = NPC_NAME;
-        npcTextEl.textContent = n.text;
-      }
+    if (near && !n.near) {
+      if (n.kind === 'owl') sfxHoot();
+      else if (n.kind === 'mole') { sfxGrumble(); n.line = (n.line + 1) % n.lines.length; }
+      else { sfxYip(); n.msgT = 0; }
     }
-    // owls can: the head swivels to follow the raccoon all the way round
-    let turn = Math.atan2(dx, dz) - head.rotation.y;
-    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-    head.rotation.y += turn * Math.min(1, dt * 6);
-    bird.position.y = 0.45 + (near ? Math.abs(Math.sin(t * 6)) * 0.07 : 0);
-    const blink = Math.sin(t * 1.3) > 0.985;
-    for (const e of eyes) e.scale.y = blink ? 0.15 : 1;
-    mark.visible = !near;
-    mark.position.y = 2.45 + Math.sin(t * 4) * 0.1;
-    mark.rotation.y = t * 2.5;
+    if (!near) n.declined = false;
+    n.near = near;
+    if (n.msgT > 0) n.msgT -= dt;
+    // after "no" the fox has her last word, then leaves the raccoon alone until he walks off
+    if (near && !level.talking && !(n.declined && n.msgT <= 0)) {
+      level.talking = n;
+      const text = n.kind === 'mole' ? n.lines[n.line] : n.kind === 'fox' ? (n.msgT > 0 ? n.msg : FOX_OFFER) : n.text;
+      if (npcNameEl.textContent !== n.name) npcNameEl.textContent = n.name;
+      if (npcTextEl.textContent !== text) npcTextEl.textContent = text;
+    }
+    let turn = Math.atan2(dx, dz);
+    const blink = Math.sin(t * 1.3 + n.x) > 0.985;
+    for (const e of u.eyes) e.scale.y = blink ? 0.15 : 1;
+    u.mark.visible = !near;
+    u.mark.rotation.y = t * 2.5;
+    if (n.kind === 'owl') {
+      // owls can: the head swivels to follow the raccoon all the way round
+      turn -= u.head.rotation.y;
+      turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+      u.head.rotation.y += turn * Math.min(1, dt * 6);
+      u.bird.position.y = 0.45 + (near ? Math.abs(Math.sin(t * 6)) * 0.07 : 0);
+      u.mark.position.y = 2.45 + Math.sin(t * 4) * 0.1;
+    } else if (n.kind === 'mole') {
+      // the mole only glances over his shoulder, and grumbles with his whole body
+      u.head.rotation.y += (clamp(turn, -0.9, 0.9) - u.head.rotation.y) * Math.min(1, dt * 4);
+      u.body.position.y = near ? Math.abs(Math.sin(t * 9)) * 0.04 : 0;
+      u.mark.position.y = 2.7 + Math.sin(t * 4) * 0.1;
+    } else {
+      turn -= u.body.rotation.y;
+      turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+      u.body.rotation.y += turn * Math.min(1, dt * 4);
+      u.tail.rotation.y = Math.sin(t * (near ? 7 : 3)) * 0.45;
+      u.body.position.y = near ? Math.abs(Math.sin(t * 5)) * 0.05 : 0;
+      u.mark.position.y = 1.85 + Math.sin(t * 4) * 0.1;
+    }
   }
   if (level.chimney) {
     smokeTimer -= dt;
@@ -3333,7 +3997,7 @@ function syncVisuals(dt, t) {
   npcPlateEl.classList.toggle('hidden', !showPlate);
   if (showPlate) {
     camera.updateMatrixWorld();
-    const [sx, sy] = screenPos(npc.x, npc.y + 2.5, npc.z);
+    const [sx, sy] = screenPos(npc.x, npc.y + npc.plateY, npc.z);
     npcPlateEl.style.left = Math.round(sx) + 'px';
     npcPlateEl.style.top = Math.round(sy) + 'px';
   }
@@ -3354,6 +4018,7 @@ function update(rdt, t) {
       updatePlayer(dt);
       if (mode === 'playing') {
         updateTraps(dt);
+        updateWater();
         updateShots(dt);
         updateOrbs(dt);
         updateEnemies(dt, t, true);
@@ -3426,7 +4091,7 @@ async function boot() {
   window.__gameReady = true;
   // small inspection handle for testing from the console
   window.__game = {
-    player, sprites, disc, run, buffs, npcPlan, heroPlan,
+    player, sprites, disc, run, buffs, npcPlan, heroPlan, foxPlan,
     get heroTimer() { return heroTimer; },
     get mode() { return mode; },
     get hearts() { return run.hearts; },
